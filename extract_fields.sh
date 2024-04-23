@@ -1,7 +1,13 @@
 #!/bin/bash
 
-DATASET=/app43027_20230422174636.dataset
-DEST=/deep_phewas/inputs
+BASE=`dirname $0`
+
+. ${BASE}/RAP.config
+
+DEST=${PROJECT_DIR}/inputs
+
+
+
 
 dx run table-exporter \
     -idataset_or_cohort_or_dashboard=$DATASET \
