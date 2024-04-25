@@ -26,7 +26,7 @@ dx run --brief -y --wait --watch swiss-army-knife \
 	-iin=docker_build.sh \
 	-iin=Dockerfile \
 	-iin=plink2_linux_$PLINK2_VERSION \
-	-icmd="cp docker_build.sh /tmp; chmod u+x /tmp/docker_build.sh; /tmp/docker_build.sh $DOCKER_TAG $PLINK2_VERSION $PACKAGE $DOCKER_SAVE" &&
+	-icmd=". docker_build.sh $DOCKER_TAG $PLINK2_VERSION $PACKAGE $DOCKER_SAVE" &&
 
 DOCKER_FILE_ID=`dx ls --brief $DOCKER_SAVE` &&
 
