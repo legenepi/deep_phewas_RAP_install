@@ -1,7 +1,7 @@
 require(tidyverse)
 
 get_file_id <- function(path, project) {
-  paste0("ls -l --brief ", project, ":", path) %>%
+  paste0("ls -l --brief '", project, ":", path, "'") %>%
     system2("dx", ., stdout=TRUE) %>%
     paste0("dx://", .)
 }
@@ -21,3 +21,13 @@ get_genos <- function(base, project) {
     pull(dx) %>%
     matrix(ncol = 3, byrow = TRUE)
 }
+
+get_upload_id <- function(file, project, path) {
+    cmd <- paste0("ls '", project, ":", path, "/", file, "'")
+    if (system2("dx", cmd, stdout=FALSE, stderr=FALSE) == 0)
+        system2("dx", cmd %>% str_replace("ls", "rm -a"))
+    upload_cmd <- paste0("upload --brief --no-progress --destination '", project, ":", path, "/' '", file, "'")
+    system2("dx", upload_cmd, stdout=TRUE) %>%
+        paste0("dx://", .)
+}
+

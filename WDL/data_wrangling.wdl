@@ -40,7 +40,7 @@ task data_preparation {
 		File GPP
 		File hesin_diag
 		File HESIN
-		File hesin_opr
+		File hesin_oper
 		File death_cause
 		File death
 		File? king_coef
@@ -56,7 +56,7 @@ task data_preparation {
 			--GPP ~{GPP} \
 			--hesin_diag ~{hesin_diag} \
 			--HESIN ~{HESIN} \
-			--hesin_oper ~{hesin_opr} \
+			--hesin_oper ~{hesin_oper} \
 			--death_cause ~{death_cause} \
 			--death ~{death} \
 			--king_coef ~{king_coef}
