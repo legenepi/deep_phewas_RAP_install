@@ -2,38 +2,28 @@
 
 . RAP.config
 
-TAB_DATA="death.tsv
-death_cause.tsv
-fields_use.txt
-gp_clinical.tsv
-gp_scripts.tsv
-hesin.tsv
-hesin_diag.tsv
-hesin_oper.tsv
-minimum_tab_data.csv"
-
-for i in $TAB_DATA; do
+for i in ${ENTITIES// /.tsv }.tsv ${MINIMUM_DATA}.csv; do
     if ! dx ls ${INPUTS}/$i > /dev/null; then
         echo "Required input $i missing from ${INPUTS}, have you run extract_fields.sh?"
         exit 1
     fi
 done
 
-export PROJECT_ID INPUTS
+export $KEYS $OPTIONS
+
+Rscript - <<-RSCRIPT
+    suppressMessages(library(tidyverse))
+    suppressMessages(library(jsonlite))
+    source("R/make_inputs_functions.R")
+
+    minimum_data <- list(phenotype_generation.tab_data=map("$tab_data", get_file_id))
+    required_files <- get_config("$KEYS", "phenotype_generation") %>%
+        map(get_file_id)
+    options <- get_config("$OPTIONS", "phenotype_generation") %>%
+        map(~get_upload_id(., "$PROJECT_ID", "$PROJECT_DIR"))
+    c(minimum_data, required_files, options) %>%
+        write_json("${PHENOTYPES}.json", pretty=TRUE, auto_unbox=TRUE)
+RSCRIPT
 
 [ -s $DXCOMPILER ] || wget $DXCOMPILER_URL -O $DXCOMPILER
-
-./R/`basename ${0/sh/R}` \
-    --data_files "${INPUTS}/minimum_tab_data.csv" \
-    --GPC "${INPUTS}/gp_clinical.tsv" \
-    --GPP "${INPUTS}/gp_scripts.tsv" \
-    --hesin_diag "${INPUTS}/hesin_diag.tsv" \
-    --HESIN "${INPUTS}/hesin.tsv" \
-    --hesin_oper "${INPUTS}/hesin_oper.tsv" \
-    --death_cause "${INPUTS}/death_cause.tsv" \
-    --death "${INPUTS}/death.tsv" \
-    --king_coef "$KING_COEF" \
-    --out "${PHENOTYPES}.json" \
-    $* &&
-    grep -q -- --help <<<"$*" ||
-    java -jar $DXCOMPILER compile WDL/phenotype_generation.wdl -compileMode IR -inputs ${PHENOTYPES}.json
+java -jar $DXCOMPILER compile WDL/phenotype_generation.wdl -project $PROJECT_ID -compileMode IR -inputs ${PHENOTYPES}.json

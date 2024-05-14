@@ -5,7 +5,7 @@ task minimum_data {
 	input {
 		Array[File]+ files
 		File? exclusions
-		String save_loc = "."
+		String save_loc
 	}
 
 	Int cores = 16
@@ -34,15 +34,15 @@ task minimum_data {
 task data_preparation {
 
 	input {
-		String save_loc = "."
+		String save_loc
 		File min_data
 		File GPC
 		File GPP
 		File hesin_diag
 		File HESIN
 		File hesin_oper
-		File death_cause
 		File death
+		File death_cause
 		File? king_coef
 	}
 

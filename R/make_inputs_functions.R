@@ -1,7 +1,14 @@
 require(tidyverse)
 
-get_file_id <- function(path, project) {
-  paste0("ls -l --brief '", project, ":", path, "'") %>%
+get_config <- function(x, prefix) {
+    str_split_1(x, " ") %>%
+        Sys.getenv %>%
+        set_names(~paste(prefix, ., sep=".")) %>%
+        discard(. == "")
+}
+
+get_file_id <- function(path) {
+  paste0("ls -l --brief '", path, "'") %>%
     system2("dx", ., stdout=TRUE) %>%
     paste0("dx://", .)
 }

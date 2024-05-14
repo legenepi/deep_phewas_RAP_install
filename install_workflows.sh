@@ -2,8 +2,6 @@
 
 . RAP.config
 
-WDL="phenotype_generation.wdl association_testing.wdl"
-
 if [ ! -s $EXTRA_OPTIONS ]; then
     echo "$EXTRA_OPTIONS not found, have you run update_docker.sh?"
     exit 1

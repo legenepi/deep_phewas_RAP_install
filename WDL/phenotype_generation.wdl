@@ -6,6 +6,17 @@ import "phenotype_creation.wdl"
 workflow phenotype_generation {
 
 	input {
+		Array[File]+ tab_data
+		File GPC
+		File GPP
+		File hesin_diag
+		File HESIN
+		File hesin_oper
+		File death
+		File death_cause
+		File? king_coef
+		File? exclusions
+		String save_loc = "."
 		File? phewas_manifest
 		File? concept_codes
 		File? PQP_codes
@@ -13,11 +24,24 @@ workflow phenotype_generation {
 	}
 
 	call data_wrangling.minimum_data {
+			input:
+				files = tab_data,
+				exclusions = exclusions,
+				save_loc = save_loc
 	}
 	
 	call data_wrangling.data_preparation {
 		input:
 			min_data = minimum_data.out,
+			GPC = GPC,
+			GPP = GPP,
+			hesin_diag = hesin_diag,
+			HESIN = HESIN,
+			hesin_oper = hesin_oper,
+			death = death,
+			death_cause = death_cause,
+			king_coef = king_coef,
+			save_loc = save_loc
 	}
 
 	call phenotype_creation.phecode_generation {
