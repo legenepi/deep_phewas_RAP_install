@@ -3,8 +3,8 @@
 . RAP.config
 
 if [ ! -s $EXTRA_OPTIONS ]; then
-    echo "$EXTRA_OPTIONS not found, have you run update_docker.sh?"
-    exit 1
+    echo "$EXTRA_OPTIONS not found, running update_docker.sh"
+    ./update_docker.sh
 fi
 
 [ -s $DXCOMPILER ] || wget $DXCOMPILER_URL -O $DXCOMPILER    

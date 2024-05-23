@@ -3,15 +3,22 @@ version 1.0
 workflow association_testing {
 
 	input {
+		Array[File]+ bgens
+		Array[File]+ bgis
+		Array[File]+ sample_files
 		File? phewas_manifest
 		File snp_list
 		String analysis_name
 		File? covariates
 		File? phenotype_inclusion_file
+		Array[File]+ phenotypes
 	}
 
 	call extracting_snps {
 		input:
+			bgens = bgens,
+			bgis = bgis,
+			sample_files = sample_files,
 			snp_list = snp_list,
 			variant_save_name = analysis_name
 	}
@@ -24,7 +31,8 @@ workflow association_testing {
 			covariates = covariates,
 			analysis_name = analysis_name,
 			phewas_manifest = phewas_manifest,
-			phenotype_inclusion_file = phenotype_inclusion_file
+			phenotype_inclusion_file = phenotype_inclusion_file,
+			phenotypes = phenotypes
 	}
 	
 	call tables_graphs {
@@ -79,9 +87,7 @@ task extracting_snps {
 	}
 
 	runtime {
-		cpu: 1
-		memory: "24 GB"
-		disks: 300
+		dx_instance_type: "mem3_ssd3_x4"
 	}
 }	
 
@@ -98,7 +104,7 @@ task PLINK_association_testing {
 		File? phenotype_inclusion_file
 	}
 
-	Int cores = 8
+	Int cores = 32
 
 	command <<<
 		echo ~{psam} ~{pvar} &&
@@ -119,8 +125,7 @@ task PLINK_association_testing {
 	}
 
 	runtime {
-		cpu: cores
-		memory: "200 GB"
+		dx_instance_type: "mem3_ssd1_v2_x32"
 	}
 }
 
@@ -143,6 +148,7 @@ task tables_graphs {
 			--per_group_name_graph \
 			--save_table_per_snp \
 			--save_table_per_group_name \
+			--save_all_graphs \
 			--sex_split \
 			--save_folder "./"
 	>>>
@@ -152,7 +158,6 @@ task tables_graphs {
 	}
 
 	runtime {
-		cores: 1
-		memory: "64 GB"
+		dx_instance_type: "mem3_ssd1_v2_x8"
 	}
 }

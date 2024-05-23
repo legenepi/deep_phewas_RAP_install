@@ -19,4 +19,4 @@ RUN apt update && apt install wget && \
 #	unzip -d /usr/local/bin plink2_linux_$PLINK2_VERSION.zip plink2 && \
 #	rm plink2_linux_$PLINK2_VERSION.zip
 
-COPY plink2_linux_$PLINK2_VERSION /usr/local/bin/plink2
+COPY --chmod=755 plink2_linux_$PLINK2_VERSION /usr/local/bin/plink2

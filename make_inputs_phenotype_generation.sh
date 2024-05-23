@@ -22,8 +22,8 @@ Rscript - <<-RSCRIPT
     options <- get_config("$OPTIONS", "phenotype_generation") %>%
         map(~get_upload_id(., "$PROJECT_ID", "$PROJECT_DIR"))
     c(minimum_data, required_files, options) %>%
-        write_json("${PHENOTYPES}.json", pretty=TRUE, auto_unbox=TRUE)
+        write_json("${PHENOTYPES_GENERATED}.json", pretty=TRUE, auto_unbox=TRUE)
 RSCRIPT
 
 [ -s $DXCOMPILER ] || wget $DXCOMPILER_URL -O $DXCOMPILER
-java -jar $DXCOMPILER compile WDL/phenotype_generation.wdl -project $PROJECT_ID -compileMode IR -inputs ${PHENOTYPES}.json
+java -jar $DXCOMPILER compile WDL/phenotype_generation.wdl -project $PROJECT_ID -compileMode IR -inputs ${PHENOTYPES_GENERATED}.json

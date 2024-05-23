@@ -1,9 +1,9 @@
 require(tidyverse)
 
-get_config <- function(x, prefix) {
+get_config <- function(x, prefix=NULL) {
     str_split_1(x, " ") %>%
-        Sys.getenv %>%
-        set_names(~paste(prefix, ., sep=".")) %>%
+        Sys.getenv(., names=TRUE) %>%
+        set_names(~paste(prefix, ., sep=ifelse(is.null(prefix), "", "."))) %>%
         discard(. == "")
 }
 

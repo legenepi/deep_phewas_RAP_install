@@ -4,12 +4,12 @@ task phenotype_preparation {
 
 	input {
 		Array[File]+ phenotype_files
-		File groupings
+		File? groupings
 		String phenotype_filtered_save_name
-		Boolean relate_remove = true
+		Boolean relate_remove
 		File? kinship_file
-		Boolean IVNT = true
-		String stats_save = "IVNT_RR_N_filtered_neuro_PanUKB_ancestry_stats"
+		Boolean IVNT
+		String stats_save
 		File? phewas_manifest
 	}
 
@@ -28,8 +28,7 @@ task phenotype_preparation {
 	>>>
 
 	output {
-		File phenotype = phenotype_filtered_save_name
-		File stats = stats_save
+		Array[File]+ out = glob("*")
 	}
 
 	runtime {
