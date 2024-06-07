@@ -23,10 +23,11 @@ You should only have to edit the `options.config` file before running the instal
 ## Extracting the UK Biobank data fields that provide the input data for phenotype generation
 
 Run `./extract_fields.sh` which will launch several `table-exporter` jobs to extract:
-    - Participant data fields
-	- Hospital episode statistics (HES)
-	- Death registry data
-    - Primary care data
+
+* Participant data fields
+* Hospital episode statistics (HES)
+* Death registry data
+* Primary care data
 
 ## Phenotype generation
 
