@@ -1,4 +1,4 @@
-version 1.0
+version development
 
 task phenotype_preparation {
 
@@ -11,6 +11,7 @@ task phenotype_preparation {
 		Boolean IVNT
 		String stats_save
 		File? phewas_manifest
+		Int k = 120
 	}
 
 	command <<<
@@ -32,7 +33,6 @@ task phenotype_preparation {
 	}
 
 	runtime {
-		cpu: 1
-		memory: "200 GB"
+		dx_instance_type: "mem3_ssd1_v2_x32"
 	}
 }
