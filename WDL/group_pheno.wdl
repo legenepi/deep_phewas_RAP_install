@@ -34,12 +34,14 @@ workflow group_pheno {
     String? catCovarList
     File phenotype_table
     File phewas_manifest
-    Int k_high = 120
-    Int k_low = 10
+    Int k_high_bt = 120
+    Int k_low_bt = 10
+    Int k_high_qt = 30
+    Int k_low_qt = 3
     Float missing_thresh = 0.15
   }
 
-  String prefix = basename(phenotype_table, ".tsv.gz")
+  String prefix = basename(phenotype_table, ".gz")
 
   scatter(geno in genos) {
     call regenie_step1.filter_genos {
@@ -73,38 +75,23 @@ workflow group_pheno {
       phewas_manifest = phewas_manifest
   }
 
-  call regenie_step1.step1 as step1_qt {
-    input:
-      bed = merge_genos.out_bed,
-      bim = merge_genos.out_bim,
-      fam = merge_genos.out_fam,
-      pheno = split_phenotypes.quant,
-      covar = covar,
-      qc_id = filter_snps.qc_id,
-      qc_snplist = filter_snps.qc_snplist,
-      covarColList = covarColList,
-      catCovarList = catCovarList,
-      bt = false,
-      prefix = basename(split_phenotypes.quant, ".txt")
-  }
-
-  call calc_dist {
+  call calc_dist as calc_dist_bt {
     input:
       pheno = split_phenotypes.bin,
       qc_id = filter_snps.qc_id
   }
   
-  call cluster_traits {
+  call cluster_traits as cluster_traits_bt {
     input:
       pheno = split_phenotypes.bin,
-      dist = calc_dist.out,
-      k_high = k_high,
-      k_low = k_low,
+      dist = calc_dist_bt.out,
+      k_high = k_high_bt,
+      k_low = k_low_bt,
       missing_thresh = missing_thresh,
       qc_id = filter_snps.qc_id
   }
   
-  scatter(g in zip(cluster_traits.pheno_groups, cluster_traits.group_ids)) {
+  scatter(g in zip(cluster_traits_bt.pheno_groups, cluster_traits_bt.group_ids)) {
     call regenie_step1.step1 as step1_bt {
       input:
         bed = merge_genos.out_bed,
@@ -122,14 +109,53 @@ workflow group_pheno {
     }
   }
 
-  call merge_pred_list {
+  call calc_dist as calc_dist_qt {
+    input:
+      pheno = split_phenotypes.quant,
+      qc_id = filter_snps.qc_id
+  }
+  
+  call cluster_traits as cluster_traits_qt {
+    input:
+      pheno = split_phenotypes.quant,
+      dist = calc_dist_qt.out,
+      k_high = k_high_qt,
+      k_low = k_low_qt,
+      missing_thresh = missing_thresh,
+      qc_id = filter_snps.qc_id
+  }
+  
+  scatter(g in zip(cluster_traits_qt.pheno_groups, cluster_traits_qt.group_ids)) {
+   call regenie_step1.step1 as step1_qt {
+      input:
+        bed = merge_genos.out_bed,
+        bim = merge_genos.out_bim,
+        fam = merge_genos.out_fam,
+        pheno = split_phenotypes.quant,
+        phenoColList = g.left,
+        covar = covar,
+        qc_id = g.right,
+        qc_snplist = filter_snps.qc_snplist,
+        covarColList = covarColList,
+        catCovarList = catCovarList,
+        bt = false,
+        prefix = basename(split_phenotypes.quant, ".txt") + "_" + basename(g.right, ".ids")
+    }
+  }
+
+  call merge_pred_list as merge_pred_list_bt {
     input:
       pred_lists = step1_bt.pred_list
   }
 
+  call merge_pred_list as merge_pred_list_qt {
+    input:
+      pred_lists = step1_qt.pred_list
+  }
+
   output {
-    Array[File] pred_list = [step1_qt.pred_list, merge_pred_list.out]
-    Array[File] loco_qt = step1_qt.loco
+    Array[File] pred_list = [merge_pred_list_bt.out, merge_pred_list_qt.out]
+    Array[File] loco_qt = flatten(step1_qt.loco)
     Array[File] loco_bt = flatten(step1_bt.loco)
   }
 }
@@ -141,7 +167,7 @@ task split_phenotypes {
     File phewas_manifest
   }
 
-  String out_bin = basename(phenotype_table, ".tsv.gz") + "_bin.txt"
+  String out_bin = basename(phenotype_table, ".gz") + "_bin.txt"
   String out_quant = sub(out_bin, "bin", "quant")
 
   command <<<
@@ -165,7 +191,7 @@ task split_phenotypes {
         filter(analysis %in% c("quant", "count")) %>%
         pull(PheWAS_ID)
 
-      pheno <- read_tsv("~{phenotype_table}", n_max = 1000)
+      pheno <- read_tsv("~{phenotype_table}")
 
       split_pheno <- function(ids, out) {
         pheno %>%
@@ -243,7 +269,6 @@ task cluster_traits {
 
   String groups_out = basename(pheno, ".txt") + "_group"
   Int n_groups = k_high + k_low
-  Array[Int] group_idx = range(n_groups)
 
   command <<<
     Rscript - <<-CLUSTER_TRAITS
@@ -252,11 +277,11 @@ task cluster_traits {
       
       qc_id <- read_tsv("~{qc_id}", col_names=c("FID", "IID"))
 
-      pheno_bin <- read_tsv("~{pheno}") %>%
+      pheno <- read_tsv("~{pheno}") %>%
         inner_join(qc_id, by=c("FID", "IID"))
 
-      pheno_bin.missing <- pheno_bin %>%
-        summarise(across(starts_with("P"), ~sum(is.na(.)/length(.)))) %>%
+      pheno.missing <- pheno %>%
+        summarise(across(c(-FID, -IID), ~sum(is.na(.)/length(.)))) %>%
         pivot_longer(everything(), names_to = "pheno", values_to = "missing")
 
       cluster_phenos <- function(x.dist, k=120, method="ward.D2") {
@@ -264,9 +289,9 @@ task cluster_traits {
           cutree(k=k) %>%
           enframe(name="pheno", value="group") %>%
           mutate(group=factor(group)) %>%
-          inner_join(pheno_bin.missing, by="pheno") %>%
+          inner_join(pheno.missing, by="pheno") %>%
           group_by(group) %>%
-          group_map(~pheno_bin %>%
+          group_map(~pheno %>%
                       select(FID, IID, all_of(.x %>% pull(pheno))) %>%
                       filter(if_any(.x %>% pull(pheno), ~!is.na(.))))
       }
@@ -278,8 +303,8 @@ task cluster_traits {
 
       pheno_dist <- readRDS("~{dist}")
 
-      pheno_high_missing <- usedist::dist_subset(pheno_dist, pheno_bin.missing %>%
-        filter(missing >= ~{missing_thresh}) %>%
+      pheno_high_missing <- usedist::dist_subset(pheno_dist,
+        pheno.missing %>% filter(missing >= ~{missing_thresh}) %>%
         pull(pheno))
 
       pheno_high_missing.list <- pheno_high_missing %>%
@@ -288,7 +313,7 @@ task cluster_traits {
       pheno_high_missing_summary <- pheno_high_missing.list %>%
         map_df(calc_missing, .id = "group")
 
-      pheno_low_missing <- usedist::dist_subset(pheno_dist, pheno_bin.missing %>%
+      pheno_low_missing <- usedist::dist_subset(pheno_dist, pheno.missing %>%
         filter(missing < ~{missing_thresh}) %>%
         pull(pheno))
 
@@ -314,10 +339,10 @@ task cluster_traits {
 
       cat(pheno_groups_out, file="~{groups_out}.txt", sep="\n")
 
-      walk(c(1:~{k_high})-1, ~write_tsv(pheno_high_missing.list[[.]] %>% select(FID, IID),
-              paste0("~{groups_out}_", ., ".ids"), col_names = FALSE))
-      walk(c(~{k_high + 1}:~{n_groups})-1, ~write_tsv(pheno_low_missing.list[[.]] %>% select(FID, IID),
-              paste0("~{groups_out}_", ., ".ids"), col_names = FALSE))
+      pheno_missing.list <- c(pheno_high_missing.list, pheno_low_missing.list)
+
+      walk(c(1:~{n_groups}), ~write_tsv(pheno_missing.list[[.]] %>% select(FID, IID),
+              paste0("~{groups_out}_", . - 1, ".ids"), col_names = FALSE))
     CLUSTER_TRAITS
   >>>
 
@@ -327,8 +352,8 @@ task cluster_traits {
   }
 
   output {
-    Array[String] pheno_groups = read_lines(groups_out)
-    Array[File] group_ids = suffix(".ids", prefix("group_", group_idx))
+    Array[String] pheno_groups = read_lines(groups_out + ".txt")
+    Array[File] group_ids = suffix(".ids", prefix("~{groups_out}_", range(n_groups)))
   }
 }
 

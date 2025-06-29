@@ -29,7 +29,8 @@ task phenotype_preparation {
   >>>
 
   output {
-    Array[File]+ out = glob("*")
+    Array[File]+ out = glob("*_~{phenotype_filtered_save_name}.gz")
+		Array[File]+ stats = glob("~{stats_save}*.csv")
   }
 
   runtime {
