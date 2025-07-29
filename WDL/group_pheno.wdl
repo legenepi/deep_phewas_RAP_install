@@ -61,13 +61,13 @@ workflow group_pheno {
       prefix = prefix
   }
 
-  call regenie_step1.filter_snps {
-    input:
-      bed = merge_genos.out_bed,
-      bim = merge_genos.out_bim,
-      fam = merge_genos.out_fam,
-      prefix = prefix
-  }
+	call regenie_step1.filter_snps as filter_snps {
+		input:
+			bed = merge_genos.out_bed,
+			bim = merge_genos.out_bim,
+			fam = merge_genos.out_fam,
+			prefix = prefix
+	}
 
   call split_phenotypes {
     input:
@@ -92,6 +92,15 @@ workflow group_pheno {
   }
   
   scatter(g in zip(cluster_traits_bt.pheno_groups, cluster_traits_bt.group_ids)) {
+		call regenie_step1.filter_snps as filter_snps_bt {
+			input:
+				bed = merge_genos.out_bed,
+				bim = merge_genos.out_bim,
+				fam = merge_genos.out_fam,
+				samples_keep = g.right,
+				prefix = basename(split_phenotypes.bin, ".txt") + "_" + basename(g.right, ".ids")
+		}
+
     call regenie_step1.step1 as step1_bt {
       input:
         bed = merge_genos.out_bed,
@@ -101,7 +110,7 @@ workflow group_pheno {
         phenoColList = g.left,
         covar = covar,
         qc_id = g.right,
-        qc_snplist = filter_snps.qc_snplist,
+        qc_snplist = filter_snps_bt.qc_snplist,
         covarColList = covarColList,
         catCovarList = catCovarList,
         bt = true,
@@ -126,6 +135,15 @@ workflow group_pheno {
   }
   
   scatter(g in zip(cluster_traits_qt.pheno_groups, cluster_traits_qt.group_ids)) {
+		call regenie_step1.filter_snps as filter_snps_qt {
+			input:
+				bed = merge_genos.out_bed,
+				bim = merge_genos.out_bim,
+				fam = merge_genos.out_fam,
+				samples_keep = g.right,
+				prefix = basename(split_phenotypes.bin, ".txt") + "_" + basename(g.right, ".ids")
+		}
+
    call regenie_step1.step1 as step1_qt {
       input:
         bed = merge_genos.out_bed,
@@ -135,7 +153,7 @@ workflow group_pheno {
         phenoColList = g.left,
         covar = covar,
         qc_id = g.right,
-        qc_snplist = filter_snps.qc_snplist,
+        qc_snplist = filter_snps_qt.qc_snplist,
         covarColList = covarColList,
         catCovarList = catCovarList,
         bt = false,
@@ -191,7 +209,7 @@ task split_phenotypes {
         filter(analysis %in% c("quant", "count")) %>%
         pull(PheWAS_ID)
 
-      pheno <- read_tsv("~{phenotype_table}")
+      pheno <- read_tsv("~{phenotype_table}", col_types = cols(.default = "d"))
 
       split_pheno <- function(ids, out) {
         pheno %>%

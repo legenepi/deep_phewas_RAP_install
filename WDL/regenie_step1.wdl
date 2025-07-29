@@ -60,6 +60,7 @@ task filter_snps {
     File bed
     File bim
     File fam
+		File? samples_keep
     String prefix
   }
 
@@ -67,6 +68,7 @@ task filter_snps {
 
   command <<<
     plink2 --bed "~{bed}" --bim "~{bim}" --fam "~{fam}" \
+      ~{"--keep " + samples_keep} \
       --geno 0.1 \
       --hwe 1e-15 \
       --mac 100 \
