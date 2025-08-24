@@ -40,7 +40,7 @@ Rscript - <<-RSCRIPT
         pull(chromosome) %>%
         unique %>%
         as.character() %>%
-        map(~paste0("$PROJECT_ID", ":", str_replace("$GENOS", "CHROM", .)))
+        map(~paste0("$PROJECT_ID", ":", str_replace("$IMPUTED", "CHROM", .)))
     
     inputs <- list(
         phenotypes="$PHENOTYPES" %>%
