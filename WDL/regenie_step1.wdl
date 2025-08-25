@@ -30,6 +30,8 @@ workflow regenie_step1 {
   }
 
   output {
+		Array[File]	pheno_bt = group_pheno.pheno_bt
+		Array[File]	pheno_qt = group_pheno.pheno_qt
     Array[File] pred_list = flatten(group_pheno.pred_list)
     Array[File] loco_qt = flatten(group_pheno.loco_qt)
     Array[File] loco_bt = flatten(group_pheno.loco_bt)

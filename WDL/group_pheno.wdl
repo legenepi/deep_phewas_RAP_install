@@ -15,7 +15,7 @@ workflow group_pheno {
     Float missing_thresh
   }
 
-  String prefix = basename(phenotype_table, ".gz")
+  String prefix = basename(phenotype_table, ".tsv.gz")
 
   scatter(geno in genos) {
     call regenie.filter_genos {
@@ -167,6 +167,8 @@ workflow group_pheno {
     Array[File] pred_list = [merge_pred_list_bt.out, merge_pred_list_qt.out]
     Array[File] loco_qt = flatten(step1_qt.loco)
     Array[File] loco_bt = flatten(step1_bt.loco)
+		File pheno_bt = split_phenotypes.bin
+		File pheno_qt = split_phenotypes.quant
   }
 }
 

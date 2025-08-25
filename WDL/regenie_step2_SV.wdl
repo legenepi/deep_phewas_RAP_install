@@ -1,78 +1,91 @@
 version 1.1
 
-import "WDL/group_pheno.wdl"
+struct Step1 {
+  File pheno
+  File pred_list
+  Array[File] loco
+}
 
-workflow regenie_step2_sv {
+workflow regenie_step2_SV {
 
   input {
-		Array[Array[File]] genos
-    File phewas_manifest
+    Array[Array[File]] genos
     File snp_list
     String analysis_name
     File? covariates
-    File? phenotype_inclusion_file
-    Array[File]+ phenotypes
+    String? phenoColList
+    Array[File] phenotypes_bt
+    Array[File] phenotypes_qt
     String? covarColList
     String? catCovarList
-    File pred_list_bt
-    Array[File] loco_bt
-    File pred_list_qt
-    Array[File] loco_qt
+    Array[File] pred_list_bt
+    Array[Array[File]] loco_bt
+    Array[File] pred_list_qt
+    Array[Array[File]] loco_qt
+    File? exclude
   }
 
-	Array[Pair[File, Array[File]]] crossed = cross(phenotypes, genos)
+  Array[Pair[File, Array[File]]] pred_loco_bt = zip(pred_list_bt, loco_bt)
+  Array[Pair[File, Pair[File, Array[File]]]] pheno_pred_loco_bt = zip(phenotypes_bt, pred_loco_bt)
 
-  scatter (pg in crossed) {
-    call group_pheno.split_phenotypes as split_pheno {
-      input:
-        phenotype_table = pg.left,
-        phewas_manifest = phewas_manifest,
-        covar = covariates
-    }
-         
+  scatter(ppl in pheno_pred_loco_bt) {
+    Step1 step1_bt = Step1 { pheno: ppl.left, pred_list: ppl.right.left, loco: ppl.right.right }
+  }
+
+  Array[Pair[Step1, Array[File]]] crossed_bt = cross(step1_bt, genos)
+
+  scatter (pg in crossed_bt) {
     call regenie_association_testing as regenie_bt {
       input:
         bgen = pg.right[0],
         bgi = pg.right[1],
         sample = pg.right[2],
-				extract = snp_list,
-        pheno = split_pheno.bin,
+        extract = snp_list,
+        exclude = exclude,
+        pheno = pg.left.pheno,
+        phenoColList = phenoColList,
         covar = covariates,
         covarColList = covarColList,
         catCovarList = catCovarList,
-        pred_list = pred_list_bt,
-        loco = loco_bt,
-        bt = true
+        pred_list = pg.left.pred_list,
+        loco = pg.left.loco,
+        bt = true,
+        prefix = analysis_name
     }
+  }
 
+  Array[Pair[File, Array[File]]] pred_loco_qt = zip(pred_list_qt, loco_qt)
+  Array[Pair[File, Pair[File, Array[File]]]] pheno_pred_loco_qt = zip(phenotypes_qt, pred_loco_qt)
+
+  scatter(ppl in pheno_pred_loco_qt) {
+    Step1 step1_qt = Step1 { pheno: ppl.left, pred_list: ppl.right.left, loco: ppl.right.right }
+  }
+
+  Array[Pair[Step1, Array[File]]] crossed_qt = cross(step1_qt, genos)
+
+  scatter (pg in crossed_qt) {
     call regenie_association_testing as regenie_qt {
       input:
         bgen = pg.right[0],
         bgi = pg.right[1],
         sample = pg.right[2],
-				extract = snp_list,
-        pheno = split_pheno.quant,
+        extract = snp_list,
+        exclude = exclude,
+        pheno = pg.left.pheno,
+        phenoColList = phenoColList,
         covar = covariates,
         covarColList = covarColList,
         catCovarList = catCovarList,
-        pred_list = pred_list_qt,
-        loco = loco_qt,
-        bt = false
+        pred_list = pg.left.pred_list,
+        loco = pg.left.loco,
+        bt = false,
+        prefix = analysis_name
     }
   }
-	
-	scatter (p in phenotypes) {
-    call merge_sv {
-			input:
-				prefix = analysis_name,
-			  pheno = p,
-				results = flatten([ regenie_bt.results, regenie_qt.results ]),
-				dict = regenie_bt.dict
-		}		
-	}
-
+  
   output {
-    Array[File] sv_results = merge_sv.merged
+    Array[File] sv_results = flatten([regenie_bt.results, regenie_qt.results])
+    Array[File] sv_dict = flatten([regenie_bt.dict, regenie_qt.dict])
   }
 }
 
@@ -88,33 +101,36 @@ task regenie_association_testing {
     File? extract
     String? covarColList
     String? catCovarList
+    String? phenoColList
     File pred_list
     Array[File] loco
     Boolean bt
+    String prefix
   }
 
-  String base = basename(bgen, '.bgen') 
-  String out = "base" + "~{if bt then '_bin' else '_quant'}"
+	String pheno_base = basename(pheno, '.txt')
+  String bgen_base = basename(bgen, '.bgen') 
+  String out = "~{prefix}_~{pheno_base}_~{bgen_base}"
 
   command <<<
     ln -s ~{sep=" " loco} .
     regenie \
       --step 2 \
       --bgen "~{bgen}" \
-			--bgi "~{bgi}" \
-			--sample "~{sample}" \
+      --bgi "~{bgi}" \
+      --sample "~{sample}" \
       ~{"--exclude " + exclude } \
       ~{"--extract " + extract } \
       ~{"--covarFile " + covar} \
       ~{"--covarColList " + covarColList} \
       ~{"--catCovarList " + catCovarList} \
       --phenoFile "~{pheno}" \
+      ~{"--phenoColList " + phenoColList} \
       --pred "~{pred_list}" \
       ~{true="--bt" false="--qt" bt} \
       --bsize 400 \
       --minMAC 3 \
       --threads=16 \
-      --nauto 23 \
       --no-split \
       --out "~{out}"
   >>>

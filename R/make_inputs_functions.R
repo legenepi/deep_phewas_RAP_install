@@ -15,7 +15,13 @@ get_file_id <- function(path) {
     paste0("dx://", .)
 }
 
-get_genos <- function(base, extract="", chroms="") {
+get_genos <- function(base, extract="", chroms="", format="plink") {
+    if (format == "plink" ) {
+        extensions = c("bed", "bim", "fam")
+    } else if (format == "bgen") {
+        extensions = c("bgen", "bgen.bgi", "sample")
+    }
+
     if (extract != "") { 
         chroms <- scan(extract, character(), quiet=TRUE) %>%
             str_remove(":.+") %>%
@@ -25,12 +31,14 @@ get_genos <- function(base, extract="", chroms="") {
     } else if (length(chroms) == 1 && chroms == "") {
         chroms <- CHROMS
     }
+
     data.table::fread(cmd=paste0("dx ls -l '", base, "'"), header = FALSE) %>%
     as_tibble %>%
     select(filename=V6, dx=V7) %>%
-    separate(filename, c("id", "chr", "b0", "v2", "ext")) %>%
+    separate_wider_delim(filename, delim=regex("[_.]"), names=c("id", "chr", "b0", "v2", "ext"), too_many="merge") %>%
+    filter(ext %in% extensions) %>%
     mutate(dx=str_replace(dx, "^\\(", "dx://") %>% str_remove("\\)$"),
-           ext=factor(ext, levels=c("bed", "bim", "fam")),
+           ext=factor(ext, levels=extensions),
            chr=str_remove(chr, "c")) %>%
     filter(chr %in% chroms) %>%
     mutate(chr=factor(chr, levels=CHROMS)) %>%
