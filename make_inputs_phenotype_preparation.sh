@@ -26,7 +26,7 @@ Rscript - <<-RSCRIPT
     kinship_file <- get_config("kinship_file") %>%
         map(get_file_id)
     filter_files <- get_config("$FILTER_FILES") %>%
-        map(~get_upload_id(., "$PROJECT_ID", "$PROJECT_DIR"))
+        map(~get_upload_id(., "$PROJECT_DIR"))
     string_vars <- get_config("$STRING_VARS")
     bool_vars <- get_config("$BOOL_VARS") %>%
         map(as.logical)
