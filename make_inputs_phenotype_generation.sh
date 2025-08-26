@@ -20,7 +20,7 @@ Rscript - <<-RSCRIPT
     required_files <- get_config("$KEYS", "phenotype_generation") %>%
         map(get_file_id)
     options <- get_config("$OPTIONS", "phenotype_generation") %>%
-        map(~get_upload_id(., "$PROJECT_ID", "$PROJECT_DIR"))
+        map(~get_upload_id(., "$PROJECT_DIR"))
     c(minimum_data, required_files, options) %>%
         write_json("${PHENOTYPES_GENERATED}.json", pretty=TRUE, auto_unbox=TRUE)
 RSCRIPT

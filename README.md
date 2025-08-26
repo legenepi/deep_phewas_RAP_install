@@ -69,7 +69,7 @@ chromosome,rsid,group_name,coded_allele,non_coded_allele,graph_save_name
 ### Regenie Step 1
 
 1. In `options.config` set:
-    - The name of the covariate file to upload (`covar=`); you should prepare a covariate file locally after extracting relevant fields from your RAP dataset.
+	- The name of the covariate file to upload (`covar=`); I have included a script to extract age,sex,array,PC{1:10} from the RAP (`extract_covar.sh`).
     - The names of the covariate columns to include (`covarColList=`, `catCovarList=`)
     - The IDs of phenotypes to include if you only want to use a subset of all phenotypes available (`phenoColList=`).
 2. Run `./make_inputs_regenie_step1.sh` which will make the .json configuration file specifying the inputs required for regenie step 1.
