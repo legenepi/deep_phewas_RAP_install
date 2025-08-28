@@ -21,7 +21,7 @@ Rscript - <<-RSCRIPT
         pull(group) %>%
         unique
 
-    phenotypes <- paste0("${PROJECT_ID}:${PHENOTYPE_TABLES}/", groupings, "_", "${phenotype_filtered_save_name}.tsv.gz") 
+    phenotypes <- paste0("${PROJECT_ID}:${PHENOTYPE_TABLES}/", groupings, "_", "${phenotype_filtered_save_name}.gz") 
 
     list(regenie_step1.genos = get_genos("$STEP1_GENO", chroms=as.character(1:22)),
             regenie_step1.missing_thresh = $REGENIE_STEP1_MISSING_THRESH,

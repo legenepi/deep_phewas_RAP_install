@@ -1,4 +1,4 @@
-version 1.1
+version 1.0
 
 task phenotype_preparation {
 
@@ -35,6 +35,5 @@ task phenotype_preparation {
 
   runtime {
     memory: "200 GB"
-    container: "nshrine/deep_phewas"
   }
 }
