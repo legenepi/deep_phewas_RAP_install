@@ -59,7 +59,8 @@ Rscript - <<-RSCRIPT
     snp_list <- read_csv("$snp_list")
     chroms <- snp_list %>%
         pull(chromosome) %>%
-        unique
+        unique %>%
+        as.character
     
     snp_list_rsid <- "$snp_list" %>%
         str_replace(".csv", "_rsid.csv")
