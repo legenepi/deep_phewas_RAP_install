@@ -3,7 +3,7 @@ FROM rocker/r-ver:4.3.1
 ENV BGENIX_VERSION=v1.1.4-CentOS6.8-x86_64
 ENV PLINK_VERSION=x86_64_20231018
 ARG PLINK2_VERSION=avx2_20220514
-ARG PACKAGE=nshrine/DeepPheWAS
+ARG PACKAGE=legenepi/DeepPheWAS@regenie
 
 RUN install2.r --error R.utils bit64 pak && \
 	Rscript -e 'pak::pak("'$PACKAGE'")' 
