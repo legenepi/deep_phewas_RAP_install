@@ -20,7 +20,7 @@ dx mkdir -p $INPUTS &&
 
     dx extract_dataset "$DATASET" --list-fields | cut -f1 | cut -f2 -d. |
       grep -Ef <(dx cat $FIELDS_MINIMUM | zcat | awk 'NR == 1 { print "eid"} {print "p"$0"($|_)"}') > $FIELDS_USE &&
-    dx upload --path ${INPUTS}/ $FIELDS_USE &&
+    dx upload --brief --no-progress --path ${INPUTS}/ $FIELDS_USE &&
 
 dx run table-exporter \
     -idataset_or_cohort_or_dashboard=$DATASET \

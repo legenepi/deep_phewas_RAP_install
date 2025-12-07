@@ -3,7 +3,7 @@
 . RAP.config 
 
 dx ls ${INPUTS}/$COVAR_FIELDS 2> /dev/null && dx rm -a ${INPUTS}/$COVAR_FIELDS
-dx upload --path ${INPUTS}/ $COVAR_FIELDS
+dx upload --brief --no-progress --path ${INPUTS}/ $COVAR_FIELDS
 
 dx run table-exporter \
     -idataset_or_cohort_or_dashboard=$DATASET \
@@ -21,8 +21,8 @@ dx run table-exporter \
 dx download ${INPUTS}/${COVAR}.csv
 
 Rscript - <<-RSCRIPT
-    library(tidyverse)
-    extracted <- read_csv("${COVAR}.csv")
+    suppressMessages(library(tidyverse))
+    extracted <- read_csv("${COVAR}.csv", show_col_types = FALSE)
     covar_new <- extracted %>%
         rename_with(~str_replace(., "22009-0.", "PC")) %>%
         rename(array=\`22000-0.0\`, sex=\`31-0.0\`, age=\`21022-0.0\`) %>%
