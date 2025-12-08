@@ -12,4 +12,4 @@ if [ ! -s ${REGENIE_STEP1_INPUTS}.dx.json ]; then
     exit 2
 fi
 
-dx run --ssh --debug-on All --destination ${PROJECT_DIR}/step1 --brief -y -f  ${REGENIE_STEP1_INPUTS}.dx.json $WORKFLOW
+dx run --destination ${PROJECT_DIR}/step1 --brief -y -f  ${REGENIE_STEP1_INPUTS}.dx.json $WORKFLOW

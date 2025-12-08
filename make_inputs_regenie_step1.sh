@@ -17,7 +17,7 @@ Rscript - <<-RSCRIPT
     suppressMessages(library(jsonlite))
     source("R/make_inputs_functions.R")
 
-    groupings <- read_tsv("$groupings") %>%
+    groupings <- read_tsv("$groupings", show_col_types = FALSE) %>%
         pull(group) %>%
         unique
 
