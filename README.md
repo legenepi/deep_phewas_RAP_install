@@ -7,7 +7,7 @@ These scripts install and run [DeepPheWAS](https://github.com/Richard-Packer/Dee
 
 # Installing DeepPheWAS in your RAP project
 
-1. Log into the [UK Biobank RAP web interface}(https://ukbiobank.dnanexus.com/) 
+1. Log into the [UK Biobank RAP web interface](https://ukbiobank.dnanexus.com/) 
 2. Start a JupyterLab instance from the Tools menu
 3. Open a Terminal
 4. Clone this repository
