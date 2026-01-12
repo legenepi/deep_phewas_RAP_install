@@ -167,8 +167,8 @@ workflow group_pheno {
     Array[File] pred_list = [merge_pred_list_bt.out, merge_pred_list_qt.out]
     Array[File] loco_qt = flatten(step1_qt.loco)
     Array[File] loco_bt = flatten(step1_bt.loco)
-		File pheno_bt = split_phenotypes.bin
-		File pheno_qt = split_phenotypes.quant
+    File pheno_bt = split_phenotypes.bin
+    File pheno_qt = split_phenotypes.quant
   }
 }
 
@@ -210,7 +210,7 @@ task split_phenotypes {
       phenoColList <- "~{select_first([phenoColList, ''])}"
 
       if (phenoColList != "") {
-				pheno_cols <- str_split_1(phenoColList, ",")
+        pheno_cols <- str_split_1(phenoColList, ",")
         pheno <- pheno %>%
           select(eid, any_of(pheno_cols))
       }
@@ -324,53 +324,56 @@ task cluster_traits {
       pheno <- read_tsv("~{pheno}") %>%
         inner_join(qc_id, by=c("FID", "IID"))
 
+      # Keep phenotype columns in a matrix; store names
+      pheno_cols <- pheno %>% select(-FID, -IID)
+      phenos <- colnames(pheno_cols)
+
+      # NA matrix (TRUE = missing, FALSE = observed)
+      M <- is.na(as.matrix(pheno_cols))   # n_samples x n_phenos
+
       pheno_dist <- readRDS("~{dist}")
-
-      n <- pheno_dist %>%
-        attr("Size")
-
       pheno_clust <- hclust(pheno_dist, method="ward.D2")
 
-      calc_missing <- function(x) {
-        summarise(x, across(c(-FID, -IID), ~sum(is.na(.)/length(.)))) %>%
-          pivot_longer(everything(), names_to = "pheno", values_to = "missing")
+      low <- 1
+      high <- ncol(M)
+      best_k <- NA
+
+      assign_all_k <- cutree(pheno_clust, k = seq_len(high)) # precompute all clusterings
+  
+      missing_props_for_group <- function(idx, M) {
+        rows_keep <- rowSums(!M[, idx, drop = FALSE]) > 0
+        if (!any(rows_keep)) {
+          rep(NA_real_, length(idx))
+        } else {
+          colMeans(M[rows_keep, idx, drop = FALSE])
+        }
       }
-
-      get_clust <- function(k) {
-        pheno_clust %>%
-          cutree(k=k) %>%
-          enframe(name="pheno", value="group")
+  
+      while (low <= high) {
+        k <- floor((low + high) / 2)
+        groups_k <- assign_all_k[, k]
+        split_idx <- split(seq_len(ncol(M)), groups_k)
+   
+        cluster_missing <- lapply(split_idx, function(idx) missing_props_for_group(idx, M))
+        all_ok <- all(unlist(cluster_missing) < ~{missing_thresh}, na.rm = TRUE)
+   
+        if (all_ok) {
+          best_k <- k
+          high <- k - 1  # try smaller k
+        } else {
+          low <- k + 1   # need more clusters
+        }
       }
-
-      possible_clusters <- map_df(1:n, get_clust, .id = "k")
-
-      get_clust_samples <- function(x) {
-       x %>%
-         group_by(group) %>%
-          group_map(~pheno %>%
-                select(c(FID, IID, .x\$pheno)) %>%
-                filter(if_any(.x\$pheno, ~!is.na(.))))
+  
+      # Return best_k and its cluster assignments
+      if (!is.na(best_k)) {
+        message("Optimum number of clusters = ", best_k)
+        groups_k <- assign_all_k[, best_k]
+        final_clusters <- tibble(pheno = phenos, group = groups_k)
+      } else {
+        message("No clustering satisfies the threshold.")
+        final_clusters <- NULL
       }
-
-      get_max_missing <- function(x) {
-          map_df(calc_missing) %>%
-          filter(missing == max(missing))
-      }
-
-      pheno_clust_max_missing <- possible_clusters %>%
-        group_by(k) %>%
-        group_modify(~get_clust_samples(.x) %>%
-                      map_df(calc_missing) %>%
-                      filter(missing == max(missing))) %>%
-        ungroup
-
-      final_clusters <- pheno_clust_max_missing %>%
-        filter(missing < ~{missing_thresh}) %>%
-        filter(k == min(k)) %>%
-        select(k) %>%
-        inner_join(possible_clusters, by="k") %>%
-        select(group, pheno) %>%
-        arrange(group)
 
       final_clusters %>%
         group_by(group) %>%
