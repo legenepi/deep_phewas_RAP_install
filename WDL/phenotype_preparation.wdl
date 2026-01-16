@@ -11,7 +11,6 @@ task phenotype_preparation {
     Boolean IVNT
     String stats_save
     File? phewas_manifest
-    Int k = 120
   }
 
   command <<<
