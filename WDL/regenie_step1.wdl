@@ -12,7 +12,7 @@ workflow regenie_step1 {
     String? covarColList
     String? catCovarList
 		String? phenoColList
-    Float missing_thresh
+		File R_batch_function
   }
 
   scatter(p in prepared_phenotypes) {
@@ -25,11 +25,13 @@ workflow regenie_step1 {
         phenotype_table = p,
         phewas_manifest = phewas_manifest,
 				phenoColList = phenoColList,
-				missing_thresh = missing_thresh
+				R_batch_function = R_batch_function
     }
   }
 
   output {
+		Array[File] missingness_report = group_pheno.missingness_report
+		Array[File] diagnostic_plots = flatten(group_pheno.diagnostic_plots)
 		Array[File]	pheno_bt = group_pheno.pheno_bt
 		Array[File]	pheno_qt = group_pheno.pheno_qt
     Array[File] pred_list = flatten(group_pheno.pred_list)

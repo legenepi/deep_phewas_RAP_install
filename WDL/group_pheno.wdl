@@ -12,7 +12,7 @@ workflow group_pheno {
     String? phenoColList
     File phenotype_table
     File phewas_manifest
-    Float missing_thresh
+    File R_batch_function
   }
 
   String prefix = basename(phenotype_table, ".tsv.gz")
@@ -43,6 +43,15 @@ workflow group_pheno {
       prefix = prefix
   }
 
+  call cluster_traits {
+    input:
+      pheno = phenotype_table,
+      manifest = phewas_manifest,
+      qc_id = filter_snps.qc_id,
+      R_batch_function = R_batch_function,
+      prefix = prefix
+  }
+  
   call split_phenotypes {
     input:
       phenotype_table = phenotype_table,
@@ -51,30 +60,9 @@ workflow group_pheno {
       phenoColList = phenoColList
   }
 
-  call calc_dist as calc_dist_bt {
-    input:
-      pheno = split_phenotypes.bin,
-      qc_id = filter_snps.qc_id
-  }
-  
-  call cluster_traits as cluster_traits_bt {
-    input:
-      pheno = split_phenotypes.bin,
-      dist = calc_dist_bt.out,
-      missing_thresh = missing_thresh,
-      qc_id = filter_snps.qc_id
-  }
-  
-  call group_ids as group_ids_bt {
-    input:
-      pheno = split_phenotypes.bin,
-      qc_id = filter_snps.qc_id,
-      pheno_groups = cluster_traits_bt.pheno_groups,
-      covar = covar
-  }
-  
-  scatter(g in zip(cluster_traits_bt.pheno_groups, group_ids_bt.group_ids)) {
-    String group_id_bt = basename(g.right, ".ids")
+  scatter(g in zip(cluster_traits.batches_bt, cluster_traits.samples_bt)) {
+    String group_id_bt = basename(g.left, ".txt")
+		String pheno_list_bt = sep(",", read_lines(g.left))
 
     call regenie.filter_snps as filter_snps_bt {
       input:
@@ -91,7 +79,7 @@ workflow group_pheno {
         bim = merge_genos.out_bim,
         fam = merge_genos.out_fam,
         pheno = split_phenotypes.bin,
-        phenoColList = g.left,
+        phenoColList = pheno_list_bt,
         covar = covar,
         qc_id = g.right,
         qc_snplist = filter_snps_bt.qc_snplist,
@@ -102,30 +90,9 @@ workflow group_pheno {
     }
   }
 
-  call calc_dist as calc_dist_qt {
-    input:
-      pheno = split_phenotypes.quant,
-      qc_id = filter_snps.qc_id
-  }
-  
-  call cluster_traits as cluster_traits_qt {
-    input:
-      pheno = split_phenotypes.quant,
-      dist = calc_dist_qt.out,
-      missing_thresh = missing_thresh,
-      qc_id = filter_snps.qc_id
-  }
-
-  call group_ids as group_ids_qt {
-    input:
-      pheno = split_phenotypes.quant,
-      qc_id = filter_snps.qc_id,
-      pheno_groups = cluster_traits_qt.pheno_groups,
-      covar = covar
-  }
-  
-  scatter(g in zip(cluster_traits_qt.pheno_groups, group_ids_qt.group_ids)) {
-    String group_id_qt = basename(g.right, ".ids")
+  scatter(g in zip(cluster_traits.batches_qt, cluster_traits.samples_qt)) {
+    String group_id_qt = basename(g.left, ".txt")
+		String pheno_list_qt = sep(",", read_lines(g.left))
 
     call regenie.filter_snps as filter_snps_qt {
       input:
@@ -142,7 +109,7 @@ workflow group_pheno {
         bim = merge_genos.out_bim,
         fam = merge_genos.out_fam,
         pheno = split_phenotypes.quant,
-        phenoColList = g.left,
+        phenoColList = pheno_list_qt,
         covar = covar,
         qc_id = g.right,
         qc_snplist = filter_snps_qt.qc_snplist,
@@ -164,11 +131,63 @@ workflow group_pheno {
   }
 
   output {
+    File missingness_report = cluster_traits.missingness
+    Array[File] diagnostic_plots = cluster_traits.diagnostics
     Array[File] pred_list = [merge_pred_list_bt.out, merge_pred_list_qt.out]
     Array[File] loco_qt = flatten(step1_qt.loco)
     Array[File] loco_bt = flatten(step1_bt.loco)
     File pheno_bt = split_phenotypes.bin
     File pheno_qt = split_phenotypes.quant
+  }
+}
+
+task cluster_traits {
+
+  input {
+    File pheno
+    File qc_id
+    File R_batch_function
+    File manifest
+    String prefix
+  }
+
+  command <<<
+    Rscript - <<-'CLUSTER_TRAITS'
+      library(tidyverse)
+      source("~{R_batch_function}")
+
+      qc_id <- read_tsv("~{qc_id}", col_names=c("FID", "IID"))
+
+      pheno <- read_tsv("~{pheno}") %>%
+        inner_join(qc_id, by=c("eid"="IID")) %>%
+        select(-FID)
+
+      batches <- batch_by_comissingness(pheno, "~{manifest}", "~{prefix}")
+
+      type <- map_chr(batches, ~unique(.x$type)) 
+
+      map(c("quantitative", "binary") %>% set_names, ~which(type == .)) %>%
+        iwalk(\(.x, .y) {
+          paste0("batch_", .x, ".txt") %>%
+            cat(file=paste0("batches_", .y, ".txt"), sep="\n")
+          paste0("keep_batch_", .x, ".txt") %>%
+            cat(file=paste0("keep_batches_", .y, ".txt"), sep="\n")
+        })
+    CLUSTER_TRAITS
+  >>>
+
+  runtime {
+    memory: "64 GB"
+    container: "rocker/tidyverse"
+  }
+
+  output {
+    File missingness = prefix + "_cluster_missingness_summary.csv"
+    Array[File] diagnostics = glob("*.png")
+    Array[File] batches_qt = read_lines("batches_quantitative.txt")
+    Array[File] samples_qt = read_lines("keep_batches_quantitative.txt")
+    Array[File] batches_bt = read_lines("batches_binary.txt")
+    Array[File] samples_bt = read_lines("keep_batches_binary.txt")
   }
 }
 
@@ -260,196 +279,6 @@ task split_phenotypes {
   runtime {
     memory: "200 GB"
     container: "rocker/tidyverse"
-  }
-}
-
-task calc_dist {
-
-  input {
-    File pheno
-    File qc_id
-  }
-
-  String dist_out = basename(pheno, ".txt") + "_dist.RDS"
-
-  command <<<
-    Rscript - <<-CALC_DIST
-      install.packages("parallelDist")
-      library(parallelDist)
-      library(tidyverse)
-      
-      pheno <- read_tsv("~{pheno}")
-      qc_id <- read_tsv("~{qc_id}", col_names=c("FID", "IID"))
-
-      pheno.m <- pheno %>%
-        inner_join(qc_id, by=c("FID", "IID")) %>%
-        select(-FID, -IID) %>%
-        mutate(across(everything(), ~is.na(.) %>% ifelse(0, 1))) %>%
-        as.matrix %>%
-        t
-
-      pheno_dist <- parallelDist(pheno.m, "binary", threads=12)
-      saveRDS(pheno_dist, "~{dist_out}")
-    CALC_DIST
-  >>>
-
-  runtime {
-    memory: "200 GB"
-    container: "rocker/tidyverse"
-  }
-
-  output {
-    File out = dist_out
-  }
-}
-
-task cluster_traits {
-
-  input {
-    File pheno
-    File qc_id
-    File dist
-    Float missing_thresh
-  }
-
-  String groups_out = basename(pheno, ".txt") + "_group"
-
-  command <<<
-    Rscript - <<-CLUSTER_TRAITS
-      install.packages("usedist")
-      library(tidyverse)
-      
-      qc_id <- read_tsv("~{qc_id}", col_names=c("FID", "IID"))
-
-      pheno <- read_tsv("~{pheno}") %>%
-        inner_join(qc_id, by=c("FID", "IID"))
-
-      # Keep phenotype columns in a matrix; store names
-      pheno_cols <- pheno %>% select(-FID, -IID)
-      phenos <- colnames(pheno_cols)
-
-      # NA matrix (TRUE = missing, FALSE = observed)
-      M <- is.na(as.matrix(pheno_cols))   # n_samples x n_phenos
-
-      pheno_dist <- readRDS("~{dist}")
-      pheno_clust <- hclust(pheno_dist, method="ward.D2")
-
-      low <- 1
-      high <- ncol(M)
-      best_k <- NA
-
-      assign_all_k <- cutree(pheno_clust, k = seq_len(high)) # precompute all clusterings
-  
-      missing_props_for_group <- function(idx, M) {
-        rows_keep <- rowSums(!M[, idx, drop = FALSE]) > 0
-        if (!any(rows_keep)) {
-          rep(NA_real_, length(idx))
-        } else {
-          colMeans(M[rows_keep, idx, drop = FALSE])
-        }
-      }
-  
-      while (low <= high) {
-        k <- floor((low + high) / 2)
-        groups_k <- assign_all_k[, k]
-        split_idx <- split(seq_len(ncol(M)), groups_k)
-   
-        cluster_missing <- lapply(split_idx, function(idx) missing_props_for_group(idx, M))
-        all_ok <- all(unlist(cluster_missing) < ~{missing_thresh}, na.rm = TRUE)
-   
-        if (all_ok) {
-          best_k <- k
-          high <- k - 1  # try smaller k
-        } else {
-          low <- k + 1   # need more clusters
-        }
-      }
-  
-      # Return best_k and its cluster assignments
-      if (!is.na(best_k)) {
-        message("Optimum number of clusters = ", best_k)
-        groups_k <- assign_all_k[, best_k]
-        final_clusters <- tibble(pheno = phenos, group = groups_k)
-      } else {
-        message("No clustering satisfies the threshold.")
-        final_clusters <- NULL
-      }
-
-      final_clusters %>%
-        group_by(group) %>%
-        summarise(pheno=paste(pheno, collapse = ",")) %>%
-        ungroup %>%
-        mutate(group=as.integer(group)) %>%
-        arrange(group) %>%
-        pull(pheno) %>%
-        cat(file="~{groups_out}.txt", sep="\n")
-    CLUSTER_TRAITS
-  >>>
-
-  runtime {
-    memory: "64 GB"
-    container: "rocker/tidyverse"
-  }
-
-  output {
-    Array[String] pheno_groups = read_lines(groups_out + ".txt")
-  }
-}
-
-task group_ids {
-
-  input {
-    File pheno
-    File qc_id
-    Array[String] pheno_groups
-    File? covar
-  }
-
-  String groups_out = basename(pheno, ".txt") + "_group"
-  Int n_groups = length(pheno_groups)
-  File samples_keep = select_first([covar, pheno])
-
-  command <<<
-    Rscript - <<-GROUP_IDS
-      library(tidyverse)
-      
-      qc_id <- read_tsv("~{qc_id}", col_names=c("FID", "IID"))
-
-      pheno <- read_tsv("~{pheno}") %>%
-        inner_join(qc_id, by=c("FID", "IID"))
-
-      samples_keep <- read_tsv("~{samples_keep}") %>%
-        select(FID, IID)
-
-      pheno <- pheno %>%
-        inner_join(samples_keep, by=c("FID", "IID"))
-
-      pheno_groups <- "~{sep=';' pheno_groups}"
-
-      final_clusters <- tibble(pheno=str_split_1(pheno_groups, ";")) %>%
-        mutate(group=1:n()) %>%
-        separate_longer_delim(pheno, ",")
-
-      final_samples <- final_clusters %>%
-        group_by(group) %>%
-        group_map(~pheno %>%
-          select(c(FID, IID, .x\$pheno)) %>%
-            filter(if_any(.x\$pheno, ~!is.na(.))))
-
-      walk(1:length(final_samples),
-          ~write_tsv(final_samples[[.]] %>%
-            select(FID, IID),
-              paste0("~{groups_out}_", . - 1, ".ids"), col_names = FALSE))
-    GROUP_IDS
-  >>>
-
-  runtime {
-    memory: "64 GB"
-    container: "rocker/tidyverse"
-  }
-
-  output {
-    Array[File] group_ids = suffix(".ids", prefix("~{groups_out}_", range(n_groups)))
   }
 }
 

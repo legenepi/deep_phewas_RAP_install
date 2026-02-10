@@ -24,12 +24,13 @@ Rscript - <<-RSCRIPT
     phenotypes <- paste0("${PROJECT_ID}:${PHENOTYPE_TABLES}/", groupings, "_", "${phenotype_filtered_save_name}.gz") 
 
     list(regenie_step1.genos = get_genos("$STEP1_GENO", chroms=as.character(1:22)),
-            regenie_step1.missing_thresh = $REGENIE_STEP1_MISSING_THRESH,
+#            regenie_step1.missing_thresh = $REGENIE_STEP1_MISSING_THRESH,
             regenie_step1.prepared_phenotypes = phenotypes %>% map(get_file_id),
             regenie_step1.covar = get_upload_id("$covar", "$PROJECT_DIR"),
             regenie_step1.covarColList = "$covarColList",
             regenie_step1.catCovarList = "$catCovarList",
             regenie_step1.phewas_manifest = get_upload_id("$phewas_manifest", "$PROJECT_DIR"),
+            regenie_step1.R_batch_function = get_upload_id("batch_by_comissingness.R", "$PROJECT_DIR"),
             regenie_step1.phenoColList = "$phenoColList") %>%
         write_json("${REGENIE_STEP1_INPUTS}.json", pretty=TRUE, auto_unbox=TRUE)
 RSCRIPT
