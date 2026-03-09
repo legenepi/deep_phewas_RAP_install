@@ -25,11 +25,10 @@ batch_by_comissingness <- function(
     write(msg, file=logfile, append=TRUE)
   }
   
-  log_msg("==== Starting batch_by_comissingness v3.3 (consolidated) ====")
+  log_msg("==== Starting batch_by_comissingness v3.3.1 (patched) ====")
   
   # ====================== 1) Load phenotype TSV ======================
-  log_msg("Loading phenotypes")
-#  Y_raw <- readr::read_tsv(pheno_tsv, show_col_types=FALSE)
+  log_msg("Loading phenotype")
   Y_raw <- pheno
   sample_id <- Y_raw[[1]]
   Y <- as.data.frame(Y_raw[,-1])
@@ -79,6 +78,10 @@ batch_by_comissingness <- function(
   meta$original_colname <- original_colnames
   meta$base_name <- base_names
   
+  # >>> PATCH: add unique, stable column position for each phenotype column
+  meta$col_pos <- seq_len(nrow(meta))
+  # <<< END PATCH
+  
   # ====================== 4) Type ================================
   meta$type <- ifelse(meta$analysis_type %in% c("quant","count"),
                       "quantitative", "binary")
@@ -101,7 +104,7 @@ batch_by_comissingness <- function(
     }
   }
   
-  png(paste0(prefix, "_","missingness_hist_unrestricted.png"), width=1200, height=800)
+  png(paste0(prefix, "missingness_hist_unrestricted.png"), width=1200, height=800)
   print(
     ggplot(meta, aes(missingness)) +
       geom_histogram(bins=50, fill="#3182ce") +
@@ -146,7 +149,7 @@ batch_by_comissingness <- function(
   diag(Jmat) <- 1
   D_all_mat <- 1 - Jmat
   
-  png(paste0(prefix, "_","jaccard_heatmap_unrestricted.png"), width=1600, height=1600)
+  png(paste0(prefix, "_jaccard_heatmap_unrestricted.png"), width=1600, height=1600)
   stats::heatmap(Jmat, symm=TRUE, main="Jaccard Co-Missingness (Unrestricted)")
   dev.off()
   
@@ -239,7 +242,9 @@ batch_by_comissingness <- function(
       if (!is.null(prev_mean_missing) && abs(mean_r - prev_mean_missing) < 1e-6) {
         out <- c(out, list(part)); next
       }
-      part_idxs <- match(part$base_name, meta$base_name)
+      # >>> PATCH: use the unique column positions instead of matching base names
+      part_idxs <- part$col_pos
+      # <<< END PATCH
       splits <- pam_split_indices(part_idxs, D_all_mat, k=2)
       if (length(splits)==1 || any(sapply(splits, length) == nrow(part))) {
         out <- c(out, list(part)); next
@@ -255,7 +260,9 @@ batch_by_comissingness <- function(
   
   pam_constrained_by_size <- function(g_df, base_names_master, D_all_mat, max_size) {
     if (nrow(g_df) <= max_size) return(list(g_df))
-    idx <- match(g_df$base_name, base_names_master)
+    # >>> PATCH: use the unique column positions rather than matching by base name
+    idx <- g_df$col_pos
+    # <<< END PATCH
     low <- 1; high <- min(nrow(g_df), max(1, ceiling(nrow(g_df)/10))+10); best <- NULL
     while (low <= high) {
       k <- floor((low + high)/2)
@@ -265,9 +272,37 @@ batch_by_comissingness <- function(
       else { low <- k + 1 }
     }
     if (is.null(best)) return(list(g_df))
-    lapply(best, function(ix) g_df[match(ix, idx), , drop=FALSE])
+    # Map split indices (col positions) back to rows in g_df
+    lapply(best, function(ix) g_df[match(ix, g_df$col_pos), , drop=FALSE])
   }
   
+  # ====================== 11) Run clustering across subgroups =========
+  log_msg("Clustering subgroups with bin-specific targets ...")
+  all_clusters <- list(); cid <- 1
+  for (sg_i in seq_along(subgroups)) {
+    g <- subgroups[[sg_i]]
+    bin_lab <- unique(g$miss_bin); if (length(bin_lab)!=1) bin_lab <- as.character(g$miss_bin[1])
+    target_missing <- bin_max_missing[[bin_lab]]
+    log_msg(sprintf("Subgroup %d | bin=%s | size=%d | domain=%s | type=%s | target=%.2f",
+                    sg_i, bin_lab, nrow(g), g$domain[1], g$type[1], target_missing))
+    init_parts <- pam_constrained_by_size(g, base_names, D_all_mat, max_size)
+    for (part in init_parts) {
+      # >>> PATCH: seed refinement with the unique column positions
+      p_idxs <- part$col_pos
+      # <<< END PATCH
+      refined <- refine_cluster_recursive(p_idxs, meta, Y, D_all_mat, max_size, target_missing)
+      for (rp in refined) {
+        rp$cluster_id <- cid; rp$miss_bin <- bin_lab
+        all_clusters[[cid]] <- rp
+        log_msg("  → Final cluster ", cid, " size=", nrow(rp), " bin=", bin_lab)
+        cid <- cid + 1
+      }
+    }
+  }
+  log_msg("Clusters before outlier splitting: ", length(all_clusters))
+  
+  # ====================== 12) Outlier peeling ========================
+  log_msg("Outlier splitting ...")
   detect_restricted_outliers <- function(cl_df, trait_max_missing=0.50, iqr_mult=1.5) {
     miss <- cl_df$missingness_restricted
     if (all(!is.finite(miss))) return(integer(0))
@@ -277,7 +312,6 @@ batch_by_comissingness <- function(
     iqr_out <- which(miss > cutoff & is.finite(miss))
     sort(unique(c(abs_out, iqr_out)))
   }
-  
   split_outlier_phenotypes <- function(Y, cl_df, trait_max_missing=0.50, iqr_mult=1.5,
                                        make_singletons=TRUE, max_size=30,
                                        min_samples_per_trait=NULL, log_fn=log_msg) {
@@ -310,7 +344,6 @@ batch_by_comissingness <- function(
     }
     list(clusters=new_clusters, dropped=dropped)
   }
-  
   postprocess_split_outliers <- function(Y, clusters, trait_max_missing=0.50, iqr_mult=1.5,
                                          make_singletons=TRUE, max_size=30,
                                          min_samples_per_trait=NULL, log_fn=log_msg) {
@@ -323,33 +356,6 @@ batch_by_comissingness <- function(
     }
     list(clusters=out, dropped=dropped_all)
   }
-  
-  # ====================== 11) Run clustering across subgroups =========
-  log_msg("Clustering subgroups with bin-specific targets ...")
-  all_clusters <- list(); cid <- 1
-  
-  for (sg_i in seq_along(subgroups)) {
-    g <- subgroups[[sg_i]]
-    bin_lab <- unique(g$miss_bin); if (length(bin_lab)!=1) bin_lab <- as.character(g$miss_bin[1])
-    target_missing <- bin_max_missing[[bin_lab]]
-    log_msg(sprintf("Subgroup %d | bin=%s | size=%d | domain=%s | type=%s | target=%.2f",
-                    sg_i, bin_lab, nrow(g), g$domain[1], g$type[1], target_missing))
-    init_parts <- pam_constrained_by_size(g, base_names, D_all_mat, max_size)
-    for (part in init_parts) {
-      p_idxs <- match(part$base_name, meta$base_name)
-      refined <- refine_cluster_recursive(p_idxs, meta, Y, D_all_mat, max_size, target_missing)
-      for (rp in refined) {
-        rp$cluster_id <- cid; rp$miss_bin <- bin_lab
-        all_clusters[[cid]] <- rp
-        log_msg("  → Final cluster ", cid, " size=", nrow(rp), " bin=", bin_lab)
-        cid <- cid + 1
-      }
-    }
-  }
-  log_msg("Clusters before outlier splitting: ", length(all_clusters))
-  
-  # ====================== 12) Outlier peeling ========================
-  log_msg("Outlier splitting ...")
   post <- postprocess_split_outliers(Y, all_clusters,
                                      trait_max_missing=0.50, iqr_mult=1.5,
                                      make_singletons=TRUE, max_size=max_size,
@@ -357,7 +363,7 @@ batch_by_comissingness <- function(
   all_clusters <- post$clusters
   log_msg("Clusters after outlier splitting: ", length(all_clusters))
   if (!is.null(post$dropped)) {
-    write.csv(post$dropped, paste0(prefix, "_","dropped_outlier_phenotypes.csv"), row.names=FALSE)
+    write.csv(post$dropped, paste0(prefix, "_dropped_outlier_phenotypes.csv"), row.names=FALSE)
     log_msg("Dropped ", nrow(post$dropped), " high-missingness phenotypes with low N.")
   }
   
@@ -384,10 +390,10 @@ batch_by_comissingness <- function(
     )
   }
   merged_stats_df <- dplyr::bind_rows(merged_stats)
-  write.csv(merged_stats_df, paste0(prefix, "_","cluster_missingness_summary.csv"), row.names=FALSE)
+  write.csv(merged_stats_df, paste0(prefix, "_cluster_missingness_summary.csv"), row.names=FALSE)
   
   # Diagnostics: restricted missingness histogram & size distribution
-  png(paste0(prefix, "_","missingness_hist_restricted.png"), width=1200, height=800)
+  png(paste0(prefix, "_missingness_hist_restricted.png"), width=1200, height=800)
   print(
     ggplot(data.frame(miss=all_restr_miss[is.finite(all_restr_miss)]), aes(miss)) +
       geom_histogram(bins=50, fill="#2f855a") +
@@ -395,7 +401,7 @@ batch_by_comissingness <- function(
       labs(title="Restricted Missingness", x="Missing fraction", y="Count")
   ); dev.off()
   
-  png(paste0(prefix, "_","cluster_size_distribution.png"), width=1200, height=800)
+  png(paste0(prefix, "_cluster_size_distribution.png"), width=1200, height=800)
   print(
     ggplot(data.frame(size=sapply(all_clusters, nrow)), aes(size)) +
       geom_histogram(binwidth=1, fill="#b83280") +
@@ -404,7 +410,7 @@ batch_by_comissingness <- function(
   ); dev.off()
   
   # ====================== 14) Write batch & keep files ===============
-  log_msg("Writing batch phenotype lists and --keep files: ")
+  log_msg("Writing batch phenotype lists and --keep files")
   for (i in seq_along(all_clusters)) {
     cl <- all_clusters[[i]]
     writeLines(cl$original_colname, file.path(paste0("batch_", i, ".txt")))
@@ -414,6 +420,6 @@ batch_by_comissingness <- function(
                 col.names=FALSE, row.names=FALSE, quote=FALSE)
   }
   
-  log_msg("==== Done (v3.3 consolidated) ====")
+  log_msg("==== Done (v3.3.1 patched) ====")
   return(all_clusters)
 }

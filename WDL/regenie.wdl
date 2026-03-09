@@ -75,9 +75,9 @@ task filter_snps {
       --maf 0.01 \
       --mind 0.1 \
       --no-id-header \
-      --out "~{out}" \
       --write-samples \
-      --write-snplist
+      --write-snplist \
+      --out "~{out}"
   >>>
 
   output {
@@ -91,6 +91,52 @@ task filter_snps {
   }
 }
 
+task filter_lowvar {
+
+  input {
+    File bed
+    File bim
+    File fam
+    File? qc_id
+    File? qc_snplist
+    File pheno
+    File? covar
+    String? covarColList
+    String? catCovarList
+    String? phenoColList
+    Boolean bt
+    String prefix
+    File R_filter_lowvar_function
+  }
+
+  String out = prefix
+
+  command <<<
+    BED="~{bed}"
+    Rscript ~{R_filter_lowvar_function} \
+      --bfile "${BED/.bed/}" \
+      ~{"--keep " + qc_id} \
+      ~{"--extract " + qc_snplist} \
+      ~{"--covar " + covar} \
+      ~{"--covar_cont_cols " + covarColList} \
+      ~{"--covar_bin_cols " + catCovarList} \
+      --pheno "~{pheno}" \
+      ~{"--pheno_cols " + phenoColList} \
+      --bsize 1000 \
+      ~{true="--bt" false="--qt" bt} \
+      --out_prefix "~{out}"
+  >>>
+
+  output {
+    File lowvar_exclude = out + ".snps_excluded_lowvar.txt"
+  }
+
+  runtime {
+    memory: "64 GB"
+    container: "rocker/tidyverse"
+  }
+}
+
 task step1 {
 
   input {
@@ -101,6 +147,7 @@ task step1 {
     File? covar
     File? qc_id
     File? qc_snplist
+    File? qc_exclude
     String? covarColList
     String? catCovarList
     String? phenoColList
@@ -115,8 +162,9 @@ task step1 {
     regenie\ 
       --step 1 \
       --bed "${BED/.bed/}" \
-      ~{"--extract " + qc_snplist} \
       ~{"--keep " + qc_id} \
+      ~{"--extract " + qc_snplist} \
+      ~{"--exclude " + qc_exclude} \
       ~{"--covarFile " + covar} \
       ~{"--covarColList " + covarColList} \
       ~{"--catCovarList " + catCovarList} \

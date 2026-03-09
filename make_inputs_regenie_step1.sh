@@ -30,7 +30,8 @@ Rscript - <<-RSCRIPT
             regenie_step1.covarColList = "$covarColList",
             regenie_step1.catCovarList = "$catCovarList",
             regenie_step1.phewas_manifest = get_upload_id("$phewas_manifest", "$PROJECT_DIR"),
-            regenie_step1.R_batch_function = get_upload_id("batch_by_comissingness.R", "$PROJECT_DIR"),
+            regenie_step1.R_batch_function = get_upload_id("$R_BATCH_FUNCTION", "$PROJECT_DIR"),
+            regenie_step1.R_filter_lowvar_function = get_upload_id("$R_FILTER_LOWVAR_FUNCTION", "$PROJECT_DIR"),
             regenie_step1.phenoColList = "$phenoColList") %>%
         write_json("${REGENIE_STEP1_INPUTS}.json", pretty=TRUE, auto_unbox=TRUE)
 RSCRIPT
