@@ -13,7 +13,6 @@ workflow regenie_step1 {
     String? catCovarList
 		String? phenoColList
 		File R_batch_function
-		File R_filter_lowvar_function
   }
 
   scatter(p in prepared_phenotypes) {
@@ -26,8 +25,7 @@ workflow regenie_step1 {
         phenotype_table = p,
         phewas_manifest = phewas_manifest,
 				phenoColList = phenoColList,
-				R_batch_function = R_batch_function,
-				R_filter_lowvar_function = R_filter_lowvar_function
+				R_batch_function = R_batch_function
     }
   }
 

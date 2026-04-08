@@ -13,7 +13,6 @@ workflow group_pheno {
     File phenotype_table
     File phewas_manifest
     File R_batch_function
-    File R_filter_lowvar_function
   }
 
   String prefix = basename(phenotype_table, ".tsv.gz")
@@ -63,7 +62,7 @@ workflow group_pheno {
 
   scatter(g in zip(cluster_traits.batches_bt, cluster_traits.samples_bt)) {
     String group_id_bt = basename(g.left, ".txt")
-    String pheno_list_bt = sep(",", read_lines(g.left))
+		String pheno_list_bt = sep(",", read_lines(g.left))
 
     call regenie.filter_snps as filter_snps_bt {
       input:
@@ -73,35 +72,17 @@ workflow group_pheno {
         samples_keep = g.right,
         prefix = group_id_bt
     }
-    
-    call regenie.filter_lowvar as filter_lowvar_bt {
-      input:
-        bed = merge_genos.out_bed,
-        bim = merge_genos.out_bim,
-        fam = merge_genos.out_fam,
-        qc_id = filter_snps_bt.qc_id,
-        qc_snplist = filter_snps_bt.qc_snplist,
-        pheno = split_phenotypes.bin,
-        phenoColList = pheno_list_bt,
-        covar = covar,
-        covarColList = covarColList,
-        catCovarList = catCovarList,
-        bt = true,
-        prefix = group_id_bt,
-        R_filter_lowvar_function = R_filter_lowvar_function
-    }
 
     call regenie.step1 as step1_bt {
       input:
         bed = merge_genos.out_bed,
         bim = merge_genos.out_bim,
         fam = merge_genos.out_fam,
-        qc_id = filter_snps_bt.qc_id,
-        qc_snplist = filter_snps_bt.qc_snplist,
-        qc_exclude = filter_lowvar_bt.lowvar_exclude,
         pheno = split_phenotypes.bin,
         phenoColList = pheno_list_bt,
         covar = covar,
+        qc_id = g.right,
+        qc_snplist = filter_snps_bt.qc_snplist,
         covarColList = covarColList,
         catCovarList = catCovarList,
         bt = true,
@@ -111,7 +92,7 @@ workflow group_pheno {
 
   scatter(g in zip(cluster_traits.batches_qt, cluster_traits.samples_qt)) {
     String group_id_qt = basename(g.left, ".txt")
-    String pheno_list_qt = sep(",", read_lines(g.left))
+		String pheno_list_qt = sep(",", read_lines(g.left))
 
     call regenie.filter_snps as filter_snps_qt {
       input:
@@ -122,34 +103,16 @@ workflow group_pheno {
         prefix = group_id_qt
     }
 
-    call regenie.filter_lowvar as filter_lowvar_qt {
-      input:
-        bed = merge_genos.out_bed,
-        bim = merge_genos.out_bim,
-        fam = merge_genos.out_fam,
-        qc_id = filter_snps_qt.qc_id,
-        qc_snplist = filter_snps_qt.qc_snplist,
-        pheno = split_phenotypes.bin,
-        phenoColList = pheno_list_qt,
-        covar = covar,
-        covarColList = covarColList,
-        catCovarList = catCovarList,
-        bt = false,
-        prefix = group_id_qt,
-        R_filter_lowvar_function = R_filter_lowvar_function
-    }
-
     call regenie.step1 as step1_qt {
       input:
         bed = merge_genos.out_bed,
         bim = merge_genos.out_bim,
         fam = merge_genos.out_fam,
-        qc_id = filter_snps_qt.qc_id,
-        qc_snplist = filter_snps_qt.qc_snplist,
-        qc_exclude = filter_lowvar_qt.lowvar_exclude,
         pheno = split_phenotypes.quant,
         phenoColList = pheno_list_qt,
         covar = covar,
+        qc_id = g.right,
+        qc_snplist = filter_snps_qt.qc_snplist,
         covarColList = covarColList,
         catCovarList = catCovarList,
         bt = false,
