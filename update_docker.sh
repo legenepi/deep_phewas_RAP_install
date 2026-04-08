@@ -26,8 +26,8 @@ DOCKER_FILE_ID=`dx upload --brief --no-progress --destination ${PROJECT_DIR}/ $D
 
 cat <<-JSON > $EXTRA_OPTIONS
 	{
-	    "defaultRuntimeAttributes" : {
-	        "docker" : "dx://${DOCKER_FILE_ID}"
+	    "default_runtime_attributes" : {
+	        "container" : "dx://${DOCKER_FILE_ID}"
 	    }
 	}	
 JSON

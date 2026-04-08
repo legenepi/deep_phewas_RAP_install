@@ -11,31 +11,31 @@ workflow regenie_step1 {
     File? covar
     String? covarColList
     String? catCovarList
-		String? phenoColList
-		File R_batch_function
-		File R_filter_lowvar_function
+    String? phenoColList
+    File R_batch_function
+    File R_filter_lowvar_function
   }
 
   scatter(p in prepared_phenotypes) {
     call sub.group_pheno {
       input:
-				genos = genos,
+        genos = genos,
         covar = covar,
         covarColList = covarColList,
         catCovarList = catCovarList,
         phenotype_table = p,
         phewas_manifest = phewas_manifest,
-				phenoColList = phenoColList,
-				R_batch_function = R_batch_function,
-				R_filter_lowvar_function = R_filter_lowvar_function
+        phenoColList = phenoColList,
+        R_batch_function = R_batch_function,
+        R_filter_lowvar_function = R_filter_lowvar_function
     }
   }
 
   output {
-		Array[File] missingness_report = group_pheno.missingness_report
-		Array[File] diagnostic_plots = flatten(group_pheno.diagnostic_plots)
-		Array[File]	pheno_bt = group_pheno.pheno_bt
-		Array[File]	pheno_qt = group_pheno.pheno_qt
+    Array[File] missingness_report = group_pheno.missingness_report
+    Array[File] diagnostic_plots = flatten(group_pheno.diagnostic_plots)
+    Array[File] pheno_bt = group_pheno.pheno_bt
+    Array[File] pheno_qt = group_pheno.pheno_qt
     Array[File] pred_list = flatten(group_pheno.pred_list)
     Array[File] loco_qt = flatten(group_pheno.loco_qt)
     Array[File] loco_bt = flatten(group_pheno.loco_bt)

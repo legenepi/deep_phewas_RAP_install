@@ -71,18 +71,22 @@ task filter_snps {
       ~{"--keep " + samples_keep} \
       --geno 0.1 \
       --hwe 1e-15 \
-      --mac 100 \
+      --mac 200 \
       --maf 0.01 \
       --mind 0.1 \
       --no-id-header \
       --write-samples \
       --write-snplist \
+			--make-bed \
       --out "~{out}"
   >>>
 
   output {
     File qc_id = out + ".id"
     File qc_snplist = out + ".snplist"
+		File qc_bed = out + ".bed"
+		File qc_bim = out + ".bim"
+		File qc_fam = out + ".fam"
   }
 
   runtime {
@@ -97,8 +101,6 @@ task filter_lowvar {
     File bed
     File bim
     File fam
-    File? qc_id
-    File? qc_snplist
     File pheno
     File? covar
     String? covarColList
@@ -115,25 +117,22 @@ task filter_lowvar {
     BED="~{bed}"
     Rscript ~{R_filter_lowvar_function} \
       --bfile "${BED/.bed/}" \
-      ~{"--keep " + qc_id} \
-      ~{"--extract " + qc_snplist} \
       ~{"--covar " + covar} \
       ~{"--covar_cont_cols " + covarColList} \
       ~{"--covar_bin_cols " + catCovarList} \
       --pheno "~{pheno}" \
       ~{"--pheno_cols " + phenoColList} \
       --bsize 1000 \
-      ~{true="--bt" false="--qt" bt} \
+      ~{true="--trait bt" false="--trait qt" bt} \
       --out_prefix "~{out}"
   >>>
 
   output {
-    File lowvar_exclude = out + ".snps_excluded_lowvar.txt"
+    File lowvar_exclude = out + ".snps_lowvar_union.txt"
   }
-
+  
   runtime {
-    memory: "64 GB"
-    container: "rocker/tidyverse"
+    memory: "12 GB"
   }
 }
 

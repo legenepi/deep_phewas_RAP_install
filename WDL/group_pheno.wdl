@@ -1,6 +1,7 @@
 version 1.1
 
 import "regenie.wdl"
+import "csv_overlap.wdl" as csv
 
 workflow group_pheno {
 
@@ -65,47 +66,55 @@ workflow group_pheno {
     String group_id_bt = basename(g.left, ".txt")
     String pheno_list_bt = sep(",", read_lines(g.left))
 
-    call regenie.filter_snps as filter_snps_bt {
-      input:
-        bed = merge_genos.out_bed,
-        bim = merge_genos.out_bim,
-        fam = merge_genos.out_fam,
-        samples_keep = g.right,
-        prefix = group_id_bt
-    }
-    
-    call regenie.filter_lowvar as filter_lowvar_bt {
-      input:
-        bed = merge_genos.out_bed,
-        bim = merge_genos.out_bim,
-        fam = merge_genos.out_fam,
-        qc_id = filter_snps_bt.qc_id,
-        qc_snplist = filter_snps_bt.qc_snplist,
-        pheno = split_phenotypes.bin,
-        phenoColList = pheno_list_bt,
-        covar = covar,
-        covarColList = covarColList,
-        catCovarList = catCovarList,
-        bt = true,
-        prefix = group_id_bt,
-        R_filter_lowvar_function = R_filter_lowvar_function
+    if (defined(phenoColList)) {
+      call csv.csv_overlap as overlap_bt {
+        input:
+          query_csv = pheno_list_bt,
+          haystack_csv = select_first([phenoColList, ""])
+      }
+      
+      String pheno_overlap_bt = overlap_bt.overlap_csv
     }
 
-    call regenie.step1 as step1_bt {
-      input:
-        bed = merge_genos.out_bed,
-        bim = merge_genos.out_bim,
-        fam = merge_genos.out_fam,
-        qc_id = filter_snps_bt.qc_id,
-        qc_snplist = filter_snps_bt.qc_snplist,
-        qc_exclude = filter_lowvar_bt.lowvar_exclude,
-        pheno = split_phenotypes.bin,
-        phenoColList = pheno_list_bt,
-        covar = covar,
-        covarColList = covarColList,
-        catCovarList = catCovarList,
-        bt = true,
-        prefix = group_id_bt
+    if (!defined(phenoColList) || overlap_bt.has_overlap) {
+      call regenie.filter_snps as filter_snps_bt {
+        input:
+          bed = merge_genos.out_bed,
+          bim = merge_genos.out_bim,
+          fam = merge_genos.out_fam,
+          samples_keep = g.right,
+          prefix = group_id_bt
+      }
+    
+      call regenie.filter_lowvar as filter_lowvar_bt {
+        input:
+          bed = filter_snps_bt.qc_bed
+          bim = filter_snps_bt.qc_bim
+          fam = filter_snps_bt.qc_fam
+          pheno = split_phenotypes.bin,
+          phenoColList = select_first([pheno_overlap_bt,pheno_list_bt]),
+          covar = covar,
+          covarColList = covarColList,
+          catCovarList = catCovarList,
+          bt = true,
+          prefix = group_id_bt,
+          R_filter_lowvar_function = R_filter_lowvar_function
+      }
+
+      call regenie.step1 as step1_bt {
+        input:
+          bed = filter_snps_bt.qc_bed
+          bim = filter_snps_bt.qc_bim
+          fam = filter_snps_bt.qc_fam
+          qc_exclude = filter_lowvar_bt.lowvar_exclude,
+          pheno = split_phenotypes.bin,
+          phenoColList = select_first([pheno_overlap_bt,pheno_list_bt]),
+          covar = covar,
+          covarColList = covarColList,
+          catCovarList = catCovarList,
+          bt = true,
+          prefix = group_id_bt
+      }
     }
   }
 
@@ -113,47 +122,55 @@ workflow group_pheno {
     String group_id_qt = basename(g.left, ".txt")
     String pheno_list_qt = sep(",", read_lines(g.left))
 
-    call regenie.filter_snps as filter_snps_qt {
-      input:
-        bed = merge_genos.out_bed,
-        bim = merge_genos.out_bim,
-        fam = merge_genos.out_fam,
-        samples_keep = g.right,
-        prefix = group_id_qt
+    if (defined(phenoColList)) {
+      call csv.csv_overlap as overlap_qt {
+        input:
+          query_csv = pheno_list_qt,
+          haystack_csv = select_first([phenoColList, ""])
+      }
+      
+      String pheno_overlap_qt = overlap_qt.overlap_csv
     }
 
-    call regenie.filter_lowvar as filter_lowvar_qt {
-      input:
-        bed = merge_genos.out_bed,
-        bim = merge_genos.out_bim,
-        fam = merge_genos.out_fam,
-        qc_id = filter_snps_qt.qc_id,
-        qc_snplist = filter_snps_qt.qc_snplist,
-        pheno = split_phenotypes.bin,
-        phenoColList = pheno_list_qt,
-        covar = covar,
-        covarColList = covarColList,
-        catCovarList = catCovarList,
-        bt = false,
-        prefix = group_id_qt,
-        R_filter_lowvar_function = R_filter_lowvar_function
-    }
+    if (!defined(phenoColList) || overlap_qt.has_overlap) {
+      call regenie.filter_snps as filter_snps_qt {
+        input:
+          bed = merge_genos.out_bed,
+          bim = merge_genos.out_bim,
+          fam = merge_genos.out_fam,
+          samples_keep = g.right,
+          prefix = group_id_qt
+     }
+  
+     call regenie.filter_lowvar as filter_lowvar_qt {
+       input:
+         bed = filter_snps_qt.qc_bed
+         bim = filter_snps_qt.qc_bim
+         fam = filter_snps_qt.qc_fam
+         pheno = split_phenotypes.quant,
+         phenoColList = select_first([pheno_overlap_qt,pheno_list_qt]),
+         covar = covar,
+         covarColList = covarColList,
+         catCovarList = catCovarList,
+         bt = false,
+         prefix = group_id_qt,
+         R_filter_lowvar_function = R_filter_lowvar_function
+     }
 
-    call regenie.step1 as step1_qt {
-      input:
-        bed = merge_genos.out_bed,
-        bim = merge_genos.out_bim,
-        fam = merge_genos.out_fam,
-        qc_id = filter_snps_qt.qc_id,
-        qc_snplist = filter_snps_qt.qc_snplist,
-        qc_exclude = filter_lowvar_qt.lowvar_exclude,
-        pheno = split_phenotypes.quant,
-        phenoColList = pheno_list_qt,
-        covar = covar,
-        covarColList = covarColList,
-        catCovarList = catCovarList,
-        bt = false,
-        prefix = group_id_qt
+     call regenie.step1 as step1_qt {
+       input:
+         bed = filter_snps_qt.qc_bed
+         bim = filter_snps_qt.qc_bim
+         fam = filter_snps_qt.qc_fam
+         qc_exclude = filter_lowvar_qt.lowvar_exclude,
+         pheno = split_phenotypes.quant,
+         phenoColList = select_first([pheno_overlap_qt,pheno_list_qt]),
+         covar = covar,
+         covarColList = covarColList,
+         catCovarList = catCovarList,
+         bt = false,
+         prefix = group_id_qt
+     }
     }
   }
 
@@ -185,8 +202,11 @@ task cluster_traits {
     File qc_id
     File R_batch_function
     File manifest
+		String? phenoColList
     String prefix
   }
+
+	String phenos_keep = select_first([phenoColList, ""])
 
   command <<<
     Rscript - <<-'CLUSTER_TRAITS'
@@ -268,13 +288,13 @@ task split_phenotypes {
       if (phenoColList != "") {
         pheno_cols <- str_split_1(phenoColList, ",")
         pheno <- pheno %>%
-          select(eid, any_of(pheno_cols))
+          select(eid, any_of(c(pheno_cols, paste0(pheno_cols, "_age"))))
       }
 
       split_pheno <- function(ids, out, covar) {
         pheno_split <- pheno %>%
           mutate(FID=eid) %>%
-          select(FID, IID=eid, any_of(ids))
+          select(FID, IID=eid, any_of(c(ids, paste0(ids, "_age"))))
 
         if (!missing(covar)) {
           cov <- read_tsv("~{covar}", col_types = cols(.default = "d")) %>%
@@ -322,20 +342,38 @@ task split_phenotypes {
 task merge_pred_list {
 
   input {
-    Array[File] pred_lists
+    Array[File?] pred_lists
   }
 
-  String pred_list_merged = sub(basename(select_first(pred_lists)), "_group_[0-9]+", "")
+  #
+  # Extract the *first defined* File (safe)
+  #
+  Array[File] defined_files = select_all(pred_lists)
+
+  # Ensure at least one file exists
+  File first_file = defined_files[0]
+
+  #
+  # Make the merged filename:
+  #   Remove "_group_<num>" from basename
+  #   Append ".merged"
+  #
+  String base = basename(first_file)
+  String cleaned = sub(base, "_group_[0-9]+", "")
+  String merged_name = cleaned + ".merged"
 
   command <<<
-    cat ~{sep=' ' pred_lists} > ~{pred_list_merged}
+    set -euo pipefail
+
+    # Concatenate only defined files
+    cat ~{sep=' ' defined_files} > ~{merged_name}
   >>>
+
+  output {
+    File out = merged_name
+  }
 
   runtime {
     memory: "4 GB"
-  }
-
-  output {
-    File out = pred_list_merged
   }
 }

@@ -6,7 +6,7 @@ ARG PLINK2_VERSION=avx2_20220514
 ARG PACKAGE=legenepi/DeepPheWAS@regenie
 
 RUN install2.r --error R.utils bit64 pak && \
-	Rscript -e 'pak::pak("'$PACKAGE'")' 
+	Rscript -e 'pak::pak(c("'$PACKAGE'", "optparse", "data.table", "bigsnpr", "bigstatsr", "matrixStats"))' 
 
 RUN apt update && apt install wget && \
 	wget https://www.chg.ox.ac.uk/~gav/resources/bgen_$BGENIX_VERSION.tgz && \
