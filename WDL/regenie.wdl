@@ -71,7 +71,7 @@ task filter_snps {
       ~{"--keep " + samples_keep} \
       --geno 0.1 \
       --hwe 1e-15 \
-      --mac 100 \
+      --mac 200 \
       --maf 0.01 \
       --mind 0.1 \
       --no-id-header \
